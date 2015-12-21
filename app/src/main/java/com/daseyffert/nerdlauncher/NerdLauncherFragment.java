@@ -1,17 +1,30 @@
 package com.daseyffert.nerdlauncher;
 
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * Created by Daniel on 12/21/2015.
  */
 public class NerdLauncherFragment extends Fragment {
+    private static final String TAG ="NerdLauncherFragment";
 
     private RecyclerView mRecyclerView;
 
@@ -31,7 +44,96 @@ public class NerdLauncherFragment extends Fragment {
         mRecyclerView = (RecyclerView) view.findViewById(R.id.fragment_nerd_launcher_recycler_view);
         //Configure the layout manager
         mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+
+        setupAdapter();
+
         return view;
     }
 
+    private void setupAdapter() {
+        Intent startupIntent = new Intent(Intent.ACTION_MAIN);
+        startupIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+        PackageManager pm = getActivity().getPackageManager();
+        List<ResolveInfo> activities = pm.queryIntentActivities(startupIntent, 0);
+
+        //Sort the activities found on AndroidOS
+        sortActivities(activities, pm);
+
+        Log.i(TAG, "Found " + activities.size() + " activities.");
+        //create instance of ActivityAdapter to set it as recyclerView Adapter
+        mRecyclerView.setAdapter(new ActivityAdapter(activities));
+    }
+
+    private void sortActivities(List<ResolveInfo> activities, final PackageManager pm) {
+        Collections.sort(activities, new Comparator<ResolveInfo>() {
+            @Override
+            public int compare(ResolveInfo lhs, ResolveInfo rhs) {
+                return String.CASE_INSENSITIVE_ORDER.compare(lhs.loadLabel(pm).toString(), rhs.loadLabel(pm).toString());
+            }
+        });
+    }
+
+    //ViewHolder for the RecyclerView
+    private class ActivityHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
+
+        private ResolveInfo mResolveInfo;
+        private TextView mNameTextView;
+        private ImageView mIconImageView;
+
+        public ActivityHolder(View itemView) {
+            super(itemView);
+
+            mNameTextView = (TextView) itemView.findViewById(R.id.nerd_launcher_list_item_text);
+            mIconImageView = (ImageView) itemView.findViewById(R.id.nerd_launcher_list_item_icon);
+
+            mNameTextView.setOnClickListener(this);
+        }
+
+        public void bindActivity(ResolveInfo resolveInfo) {
+            mResolveInfo = resolveInfo;
+            PackageManager pm = getActivity().getPackageManager();
+            String appName = mResolveInfo.loadLabel(pm).toString();
+
+            mNameTextView.setText(appName);
+            mIconImageView.setImageDrawable(resolveInfo.loadIcon(pm));
+        }
+
+        //Explicitly start activty
+        @Override
+        public void onClick(View v) {
+            ActivityInfo activityInfo = mResolveInfo.activityInfo;
+
+            Intent intent = new Intent(Intent.ACTION_MAIN).setClassName(activityInfo.applicationInfo.packageName, activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            startActivity(intent);
+        }
+    }
+
+    //Adapter for the RecyclerView
+    private class ActivityAdapter extends RecyclerView.Adapter<ActivityHolder> {
+        private final List<ResolveInfo> mActivities;
+
+        private ActivityAdapter(List<ResolveInfo> activities) {
+            mActivities = activities;
+        }
+
+        @Override
+        public ActivityHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            LayoutInflater layoutInflater = LayoutInflater.from(getActivity());
+            View view = layoutInflater.inflate(R.layout.nerd_launcher_list_item, parent, false);
+            return new ActivityHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(ActivityHolder activityHolder, int position) {
+            ResolveInfo resolveInfo = mActivities.get(position);
+            activityHolder.bindActivity(resolveInfo);
+        }
+
+        @Override
+        public int getItemCount() {
+            return mActivities.size();
+        }
+    }
 }
